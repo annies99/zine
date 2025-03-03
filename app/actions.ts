@@ -178,33 +178,32 @@ export async function sendAccessRequest(userEmail: string, requestType: string) 
 
 export async function addWatermark(imageUrl: string) {
   try {
+    console.log('Starting watermark process for URL:', imageUrl)
+    
     // Fetch the image
     const response = await fetch(imageUrl)
     if (!response.ok) {
+      console.error('Failed to fetch image:', response.status, response.statusText)
       throw new Error('Failed to fetch image')
     }
     
     const imageBuffer = await response.arrayBuffer()
+    console.log('Image buffer size:', imageBuffer.byteLength)
     
     // Process the image with sharp
     const watermarkedImage = await sharp(Buffer.from(imageBuffer))
       .composite([{
-        input: Buffer.from(
-          `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-            <text 
-              x="95%" 
-              y="5%" 
-              font-family="Arial" 
-              font-size="120" 
-              fill="white" 
-              text-anchor="end" 
-              opacity="0.8"
-              transform="translate(0, 0)"
-            >zine</text>
-          </svg>`
-        ),
-        top: 0,
-        left: 0,
+        input: {
+          text: {
+            text: 'zine',
+            font: 'Arial',
+            fontSize: 48,
+            rgba: true
+          }
+        },
+        top: 20,
+        left: 20,
+        gravity: 'northeast'
       }])
       .jpeg({
         quality: 100,
@@ -212,9 +211,14 @@ export async function addWatermark(imageUrl: string) {
       })
       .toBuffer()
 
+    console.log('Watermarked image size:', watermarkedImage.length)
     return watermarkedImage
   } catch (error) {
-    console.error('Watermark error:', error)
+    console.error('Detailed watermark error:', error)
+    if (error instanceof Error) {
+      console.error('Error message:', error.message)
+      console.error('Error stack:', error.stack)
+    }
     throw new Error('Failed to watermark image')
   }
 }

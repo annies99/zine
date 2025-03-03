@@ -28,9 +28,15 @@ export function ActionButtons({ currentImageUrl }: ActionButtonsProps) {
 
     try {
       setIsDownloading(true)
+      console.log('Starting download for URL:', currentImageUrl)
       
       // Get watermarked image from server action
       const watermarkedImageBuffer = await addWatermark(currentImageUrl)
+      console.log('Received watermarked image buffer:', watermarkedImageBuffer.length, 'bytes')
+      
+      if (!watermarkedImageBuffer || watermarkedImageBuffer.length === 0) {
+        throw new Error('Received empty image buffer')
+      }
       
       // Convert buffer to base64
       const base64Image = Buffer.from(watermarkedImageBuffer).toString('base64')
@@ -53,7 +59,11 @@ export function ActionButtons({ currentImageUrl }: ActionButtonsProps) {
         description: "The photo has been saved to your device.",
       })
     } catch (error) {
-      console.error('Download failed:', error)
+      console.error('Detailed download error:', error)
+      if (error instanceof Error) {
+        console.error('Error message:', error.message)
+        console.error('Error stack:', error.stack)
+      }
       toast({
         title: "Download failed",
         description: "Could not download the photo. Please try again.",

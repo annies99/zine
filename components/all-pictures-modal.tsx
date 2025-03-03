@@ -97,7 +97,7 @@ export function AllPicturesModal() {
             Share this album and enter your email to get access to all pictures.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <Input
               value={currentUrl}
@@ -113,7 +113,6 @@ export function AllPicturesModal() {
               {hasShared ? "Shared!" : "Share"}
             </Button>
           </div>
-          <div className="h-2" />
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <Input
               type="email"

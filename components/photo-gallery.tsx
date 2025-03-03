@@ -15,20 +15,22 @@ export function PhotoGallery({ photos, onCurrentImageChange }: PhotoGalleryProps
   const [currentIndex, setCurrentIndex] = useState(0)
   const [touchStart, setTouchStart] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const [dragOffset, setDragOffset] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const nextImage = () => {
     setCurrentIndex((prev) => (prev + 1) % photos.length)
+    setDragOffset(0)
   }
 
   const previousImage = () => {
     setCurrentIndex((prev) => (prev - 1 + photos.length) % photos.length)
+    setDragOffset(0)
   }
 
   const handlers = useSwipeable({
     onSwipedLeft: nextImage,
     onSwipedRight: previousImage,
-    preventDefaultTouchmoveEvent: true,
     trackMouse: true,
   })
 
@@ -39,6 +41,9 @@ export function PhotoGallery({ photos, onCurrentImageChange }: PhotoGalleryProps
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return
+    const currentX = e.clientX
+    const diff = touchStart - currentX
+    setDragOffset(diff)
   }
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -52,11 +57,16 @@ export function PhotoGallery({ photos, onCurrentImageChange }: PhotoGalleryProps
       } else {
         previousImage()
       }
+    } else {
+      setDragOffset(0)
     }
     setIsDragging(false)
   }
 
   const handleMouseLeave = () => {
+    if (isDragging) {
+      setDragOffset(0)
+    }
     setIsDragging(false)
   }
 
@@ -73,21 +83,37 @@ export function PhotoGallery({ photos, onCurrentImageChange }: PhotoGalleryProps
 
   return (
     <div 
-      className="relative w-full aspect-[3/4] cursor-grab active:cursor-grabbing"
+      ref={containerRef}
+      className="relative w-full aspect-[3/4] cursor-grab active:cursor-grabbing overflow-hidden"
       {...handlers}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
     >
-      <Image
-        src={photos[currentIndex].url || "/placeholder.svg"}
-        alt={`Photo ${currentIndex + 1}`}
-        fill
-        className="object-cover select-none"
-        priority
-        draggable={false}
-      />
+      <div 
+        className="flex h-full transition-transform duration-300 ease-out"
+        style={{ 
+          transform: `translateX(calc(-${currentIndex * 100}% + ${dragOffset}px))`,
+          width: `${photos.length * 100}%`
+        }}
+      >
+        {photos.map((photo, index) => (
+          <div 
+            key={photo.key}
+            className="relative w-full h-full flex-shrink-0"
+          >
+            <Image
+              src={photo.url || "/placeholder.svg"}
+              alt={`Photo ${index + 1}`}
+              fill
+              className="object-cover select-none"
+              priority={index === currentIndex}
+              draggable={false}
+            />
+          </div>
+        ))}
+      </div>
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
         {photos.map((_, index) => (
           <button
@@ -95,7 +121,10 @@ export function PhotoGallery({ photos, onCurrentImageChange }: PhotoGalleryProps
             className={`w-2 h-2 rounded-full ${
               index === currentIndex ? "bg-white" : "bg-white/50"
             }`}
-            onClick={() => setCurrentIndex(index)}
+            onClick={() => {
+              setCurrentIndex(index)
+              setDragOffset(0)
+            }}
             aria-label={`Go to photo ${index + 1}`}
           />
         ))}
