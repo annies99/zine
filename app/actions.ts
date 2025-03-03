@@ -21,12 +21,23 @@ const s3Client = new S3Client({
 
 export async function getAlbumContent(albumName: string) {
   try {
+    console.log('Starting getAlbumContent for album:', albumName)
+    console.log('AWS Region:', process.env.AWS_REGION)
+    console.log('AWS Bucket:', process.env.AWS_S3_BUCKET_NAME)
+    
+    if (!process.env.AWS_REGION || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_S3_BUCKET_NAME) {
+      console.error('Missing required AWS environment variables')
+      throw new Error('Missing required AWS environment variables')
+    }
+
     const photoResponse = await s3Client.send(
       new ListObjectsV2Command({
         Bucket: process.env.AWS_S3_BUCKET_NAME!,
         Prefix: `albums/${albumName}/`,
       })
     )
+
+    console.log('Photo response:', photoResponse.Contents?.length, 'files found')
 
     const photos = await Promise.all(
       (photoResponse.Contents || [])
@@ -41,6 +52,8 @@ export async function getAlbumContent(albumName: string) {
         })
     )
 
+    console.log('Processed photos:', photos.length)
+
     const audioResponse = await s3Client.send(
       new ListObjectsV2Command({
         Bucket: process.env.AWS_S3_BUCKET_NAME!,
@@ -48,18 +61,15 @@ export async function getAlbumContent(albumName: string) {
       })
     )
 
-    console.log('Album name:', albumName)
-    console.log('All files in album:', audioResponse.Contents?.map(item => item.Key))
+    console.log('Audio response:', audioResponse.Contents?.length, 'files found')
     
     const audioFile = audioResponse.Contents?.find(item => {
-      console.log('Checking file:', item.Key)
       return item.Key?.toLowerCase().endsWith('.mp3')
     })
-    console.log('Found audio file:', audioFile)
+    console.log('Found audio file:', audioFile?.Key)
 
     let audioData = null
     if (audioFile?.Key) {
-      console.log('Audio file key:', audioFile.Key)
       const audioUrl = await getSignedUrl(
         s3Client,
         new GetObjectCommand({
@@ -70,34 +80,41 @@ export async function getAlbumContent(albumName: string) {
       )
       
       const songName = audioFile.Key.split('/').pop()?.replace('.mp3', '') || "Album Audio"
-      console.log('Extracted song name:', songName)
-      console.log('Generated audio URL:', audioUrl)
+      console.log('Generated audio URL and song name:', { songName })
       
       audioData = {
         url: audioUrl,
         songName: songName
       }
-    } else {
-      console.log('No audio file found in the album')
     }
-
-    console.log('Final audioData being returned:', audioData)
 
     return { 
       photos,
       audioFile: audioData
     }
   } catch (error) {
-    console.error("Error fetching album content:", error)
-    throw new Error("Failed to fetch album content")
+    console.error("Detailed error in getAlbumContent:", error)
+    if (error instanceof Error) {
+      console.error("Error message:", error.message)
+      console.error("Error stack:", error.stack)
+    }
+    throw new Error(`Failed to fetch album content: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
 export async function submitEventForm(name: string, phone: string) {
   // Remove formatting from phone number before storing
   const cleanedPhone = phone.replace(/\D/g, "")
+  
+  // Validate phone number
+  if (!cleanedPhone || cleanedPhone.length !== 10) {
+    console.error("Invalid phone number:", phone)
+    throw new Error("Please enter a valid 10-digit phone number")
+  }
 
   try {
+    console.log("Starting form submission with Supabase URL:", process.env.SUPABASE_URL)
+    
     // Insert user data
     const { data: userData, error: userError } = await supabase
       .from("users")
@@ -110,8 +127,13 @@ export async function submitEventForm(name: string, phone: string) {
       .single()
 
     if (userError) {
-      console.error("Error inserting data:", userError)
-      throw new Error("Failed to submit form")
+      console.error("Supabase error:", userError)
+      throw new Error(userError.message || "Failed to submit form")
+    }
+
+    if (!userData) {
+      console.error("No user data returned from Supabase")
+      throw new Error("Failed to create user")
     }
 
     // Instead of using auth.signUp, just create a session token directly
@@ -125,7 +147,11 @@ export async function submitEventForm(name: string, phone: string) {
 
     return userData
   } catch (error) {
-    console.error("Error:", error)
+    console.error("Detailed submission error:", error)
+    if (error instanceof Error) {
+      console.error("Error message:", error.message)
+      console.error("Error stack:", error.stack)
+    }
     throw new Error("Failed to process submission")
   }
 }
@@ -190,24 +216,38 @@ export async function addWatermark(imageUrl: string) {
     const imageBuffer = await response.arrayBuffer()
     console.log('Image buffer size:', imageBuffer.byteLength)
     
+    // Create SVG watermark with better mobile compatibility
+    const svgBuffer = Buffer.from(
+      `<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <text 
+          x="105%" 
+          y="80%" 
+          font-family="Arial, sans-serif" 
+          font-style="italic"
+          font-weight="bold"
+          font-size="45" 
+          fill="white" 
+          text-anchor="end" 
+          opacity="0.8"
+          dominant-baseline="hanging"
+          transform="translate(0, 0)"
+        >@nyczine.</text>
+      </svg>`
+    )
+    
     // Process the image with sharp
     const watermarkedImage = await sharp(Buffer.from(imageBuffer))
       .composite([{
-        input: {
-          text: {
-            text: 'zine',
-            font: 'Arial',
-            fontSize: 48,
-            rgba: true
-          }
-        },
+        input: svgBuffer,
+        gravity: 'northeast',
         top: 20,
-        left: 20,
-        gravity: 'northeast'
+        left: 20
       }])
       .jpeg({
         quality: 100,
-        progressive: true
+        progressive: true,
+        mozjpeg: true,
+        chromaSubsampling: '4:4:4'
       })
       .toBuffer()
 

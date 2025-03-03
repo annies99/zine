@@ -20,6 +20,7 @@ export function RequestUsModal() {
   const [email, setEmail] = useState("")
   const [isOpen, setIsOpen] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
 
   const handleOpenChange = (open: boolean) => {
@@ -27,6 +28,7 @@ export function RequestUsModal() {
     if (!open) { // When modal is closing
       setIsSuccess(false)
       setEmail("")
+      setIsSubmitting(false)
     }
   }
 
@@ -46,6 +48,7 @@ export function RequestUsModal() {
       return
     }
     
+    setIsSubmitting(true)
     console.log("Starting zine request for:", email)
     
     try {
@@ -62,6 +65,8 @@ export function RequestUsModal() {
         description: "Failed to send request. Please try again.",
         variant: "destructive",
       })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -88,8 +93,14 @@ export function RequestUsModal() {
             onChange={(e) => setEmail(e.target.value)}
             required
             pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+            disabled={isSubmitting}
           />
-          <Button type="submit">Submit</Button>
+          <Button 
+            type="submit"
+            disabled={isSubmitting || !isValidEmail(email)}
+          >
+            {isSubmitting ? "Submitting..." : "Submit"}
+          </Button>
           {isSuccess && (
             <p className="text-center text-green-600 font-medium">
               Zine requested!
